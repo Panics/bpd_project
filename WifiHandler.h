@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <WiFiS3.h>
+#include "SharedPtr.h"
 
 // ------------------------------------------------------------------------------------------------
 class WifiHandler {
@@ -22,5 +23,7 @@ class WifiHandler {
     void _printCurrentNet();
     void _printWifiData();
 };
+
+typedef SharedPtr<WifiHandler> WifiHandlerPtr;
 
 #endif

@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <ArduinoOSCWiFi.h>
+#include "SharedPtr.h"
 
 // ------------------------------------------------------------------------------------------------
 class OscHandler {
@@ -26,5 +27,7 @@ class OscHandler {
     unsigned int _destinationPort;
     IPAddress _destinationIP;
 };
+
+typedef SharedPtr<OscHandler> OscHandlerPtr;
 
 #endif

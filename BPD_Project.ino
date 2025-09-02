@@ -34,7 +34,7 @@
 // Setting up the Ardiuno script
 // =============================
 //
-// Configure the OSCSENDIP define below, to be the IP address of the machine running protokol
+// Configure the OSCDESTINATIONIP define below, to be the IP address of the machine running protokol
 //
 
 /*
@@ -77,8 +77,8 @@ To Use
 #define THRESHOLD_VELOCITY          10
 
 // OSC configuration
-#define OSCSENDIP                   IPAddress(192,168,1,255)
-#define OSCSENDPORT                 2324
+#define OSCDESTINATIONIP            IPAddress(192,168,1,255)
+#define OSCDESTINATIONPORT          2323
 #define OSCRECEIVEPORT              2323
 #define OSCSENDADDRESSANGLE         "/Brandeis/BPD/SendAngle"
 #define OSCSENDADDRESSGYRO          "/Brandeis/BPD/SendGyro"
@@ -87,33 +87,61 @@ To Use
 #define OSCSENDADDRESSTEMP          "/Brandeis/BPD/SendTemp"
 #define OSCRECEIVEADDRESS           "/Brandeis/BPD/Receive"
 
-// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
-#include "Config.h"
-#include "arduino_secrets.h"
+// Debug output configuration
+// #define DEBUGLOG_DISABLE_LOG
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------
-// objects defined
+// arduino includes
+#include <Arduino.h>
+#include <Adafruit_Sensor.h>
+#include <DebugLog.h>
+#include <Adafruit_GFX.h>
+#include <ArduinoGraphics.h>
+#include <Arduino_LED_Matrix.h>
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+// project includes
+#include "arduino_secrets.h"
+#include "WifiHandler.h"
+#include "OscHandler.h"
+#include "SensorHandler.h"
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+// globally defined ojects and variables
+
+// For accessing the LED matrix
 ArduinoLEDMatrix gLedMatrix;
-VibrotactorActivationMode gVibrotactorActivationMode = RELATIVE_ANGLE;
+// For accessing wifi
+WifiHandlerPtr gWifiHandler;
+// For accessing OSC
+OscHandlerPtr gOscHandler;
+// For accessing IMU
+SensorHandlerPtr gSensorHandler;
+
+// Holds msec of when last a given activity took place
 unsigned long gLastOscMessageSendMillis = 0;
 unsigned long gLastDebugPrintMillis = 0;
 
-// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
-WifiHandlerPtr gWifiHandler;
-OscHandlerPtr gOscHandler;
-SensorHandlerPtr gSensorHandler;
-
+// frame for displaying on LED matrix. See https://docs.arduino.cc/tutorials/uno-r4-wifi/led-matrix/
 const uint32_t gLedMatrixFrame_Happy[] = {
     0x19819,
     0x80000001,
     0x81f8000
 };
 
+// frame for displaying on LED matrix. See https://docs.arduino.cc/tutorials/uno-r4-wifi/led-matrix/
 const uint32_t gLedMatrixFrame_Heart[] = {
     0x3184a444,
     0x44042081,
     0x100a0040
 };
+
+// Whether to use angular velocity or relative angle to calculate tactor activation
+enum VibrotactorActivationMode {
+  ANGULAR_VELOCITY,
+  RELATIVE_ANGLE
+};
+VibrotactorActivationMode gVibrotactorActivationMode = RELATIVE_ANGLE;
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 void do_not_continue(){
@@ -153,7 +181,7 @@ void initializeWifi(){
 void initializeOsc(){
   LOG_INFO("Setting up Osc");
   gOscHandler = OscHandlerPtr(new OscHandler());
-  if(!gOscHandler->Initialize(OSCSENDPORT, OSCSENDIP, OSCRECEIVEPORT, OSCRECEIVEADDRESS )){
+  if(!gOscHandler->Initialize(OSCDESTINATIONPORT, OSCDESTINATIONIP, OSCRECEIVEPORT, OSCRECEIVEADDRESS )){
      do_not_continue();
   }
 }
@@ -235,7 +263,7 @@ void updateVibrotactors(){
   // Log some debug information every DEBUG_PRINT_INTERVAL_MS milliseconds - for now, configured to go to serial 
   // 
   String msg;
-  if (false && (millis() - gLastDebugPrintMillis >= DEBUG_PRINT_INTERVAL_MS)) {
+  if ((millis() - gLastDebugPrintMillis >= DEBUG_PRINT_INTERVAL_MS)) {
     msg = "Vibrotactor Activation Status:";
     LOG_INFO(msg);
 
@@ -377,6 +405,9 @@ void loop() {
   OscHandler::Update();
   gSensorHandler->Update();
 
+  // 
+  // Handle sending/receiving OSC
+  //
   sendOSCMessages();
   receiveOSCMessages();
   
