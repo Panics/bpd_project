@@ -1,0 +1,387 @@
+// Getting started with Arduino IDE
+// ================================
+//
+// If not already installed, install the following libraries using Arduino IDE Library Manager (Menu Tools->Manage Libraries)
+//
+// Adafruit Unified Sensor
+// Adafruit GFX Library
+// MPU6050_light
+// ArduinoGraphics
+// ArduinoOSC
+//
+//
+// Monitoring OSC Messages
+// =======================
+//
+// Install https://hexler.net/protokol#windows
+// Configure to monitor for OSC messages on port 2323 (this can be configured in the osc section below)
+//
+// Visualizing OSC Messages
+// =======================
+//
+// Install https://hexler.net/touchosc 
+// Open the json file: BPD.tosc
+// Configure to monitor for OSC messages on port 2323 (the Arduino is sending to this port, this can be configured in the osc section below)
+// - Press the chain link icon in the toolbar at the top of the screen
+//  - OSC Connection 1:
+//  - UDP
+//  - 127.0.0.1
+//  - Send port 2324
+//  - Receive port 2323
+// - Press the 'play' icon in the toolbar at the top of the screen
+// Touch OSC essentially does the same as Protokol: showing OSC messages - but with graphical widgets instead of scrolling text 
+//
+// Setting up the Ardiuno script
+// =============================
+//
+// Configure the OSCSENDIP define below, to be the IP address of the machine running protokol
+//
+
+/*
+Arduino Dance Project Motion Prototype Version 5
+
+Version 1: using rotation sensor to turn on vibrotactors
+Version 2: sending rotation wirelessly using ArduinoDanceprojectReceive
+Version 3: using calibration code to get position,sending which vibrotactor to vibrate and also vibrating them on the local machine
+Version 4: sending which tactors to vibrate wirelessly, also incldues receive mode configurable via jumper pin
+Version 5 : calibrated accelaration sensor by zeroing position with offset
+Version 6: Option for outputting velocity
+
+Using the  MPU6050 acceleromoter, gyroscpe,and termperature sensor and digital outputs based off the 
+X, Y,and Z Axis thresholds
+Here is the code source: https://github.com/rfetick/MPU6050_light
+
+Based on AdaFruit MPU6050 Example
+from https://github.com/jacobsmith2021/Arduino-Dance-Project
+
+To Use
+1) Solder to header pins safely
+2) Plug MPU6050 sensor into GND, VCC to 5V, SDA, and SCL  on Arduino chip
+3) Plug Vibrotactors, LEDS or any other digital output into digital ports 0, 1, and 2, and 3
+  make sure your digital output circuit is correct, LED's usually need a 220 Ω (Ohm, unit for resistance) resistor
+*/
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The digital ports of the vibrotactors
+#define X_PIN                       0
+#define Y_PIN                       1
+#define X_PIN_BEHIND                2
+#define Y_PIN_BEHIND                3
+
+// Intervals for sending OSC data, or printing status information
+#define TRANSMISSION_INTERVAL_MS    100
+#define DEBUG_PRINT_INTERVAL_MS     10000
+
+// Threshold values used for vibrotactor activation calculation
+#define THRESHOLD_DEGREES           20
+#define THRESHOLD_VELOCITY          10
+
+// OSC configuration
+#define OSCSENDIP                   IPAddress(192,168,1,255)
+#define OSCSENDPORT                 2324
+#define OSCRECEIVEPORT              2323
+#define OSCSENDADDRESSANGLE         "/Brandeis/BPD/SendAngle"
+#define OSCSENDADDRESSGYRO          "/Brandeis/BPD/SendGyro"
+#define OSCSENDADDRESSACCELANGLE    "/Brandeis/BPD/SendAccelAngle"
+#define OSCSENDADDRESSACCEL         "/Brandeis/BPD/SendAccel"
+#define OSCSENDADDRESSTEMP          "/Brandeis/BPD/SendTemp"
+#define OSCRECEIVEADDRESS           "/Brandeis/BPD/Receive"
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+#include "Config.h"
+#include "arduino_secrets.h"
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+// objects defined
+ArduinoLEDMatrix gLedMatrix;
+VibrotactorActivationMode gVibrotactorActivationMode = RELATIVE_ANGLE;
+unsigned long gLastOscMessageSendMillis = 0;
+unsigned long gLastDebugPrintMillis = 0;
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+WifiHandlerPtr gWifiHandler;
+OscHandlerPtr gOscHandler;
+SensorHandlerPtr gSensorHandler;
+
+const uint32_t gLedMatrixFrame_Happy[] = {
+    0x19819,
+    0x80000001,
+    0x81f8000
+};
+
+const uint32_t gLedMatrixFrame_Heart[] = {
+    0x3184a444,
+    0x44042081,
+    0x100a0040
+};
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void do_not_continue(){
+  while(true){}
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void initializeLedMatrix(){
+  LOG_INFO("Setting up LED Matrix");
+  gLedMatrix.begin();
+  gLedMatrix.loadFrame(gLedMatrixFrame_Happy);
+  delay(1000);
+  gLedMatrix.loadFrame(gLedMatrixFrame_Heart);
+  delay(1000);
+  gLedMatrix.clear();
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void initializeSensor(){
+  LOG_INFO("Setting up Sensor");
+  gSensorHandler = SensorHandlerPtr(new SensorHandler());
+  if(!gSensorHandler->Initialize()){
+    do_not_continue();
+  }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void initializeWifi(){
+  LOG_INFO("Setting up WiFi");
+  gWifiHandler = WifiHandlerPtr(new WifiHandler());
+  if(!gWifiHandler->Initialize(SECRET_SSID, SECRET_PASS)){
+     do_not_continue();
+  }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void initializeOsc(){
+  LOG_INFO("Setting up Osc");
+  gOscHandler = OscHandlerPtr(new OscHandler());
+  if(!gOscHandler->Initialize(OSCSENDPORT, OSCSENDIP, OSCRECEIVEPORT, OSCRECEIVEADDRESS )){
+     do_not_continue();
+  }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void initializeVibrotactors(){
+  LOG_INFO("Setting up Vibrotactors");
+
+  //
+  // Configure I/O pins
+  //
+  pinMode(X_PIN, OUTPUT);         // assumed to drive vibrotactor
+  pinMode(Y_PIN, OUTPUT);         // assumed to drive vibrotactor
+  pinMode(X_PIN_BEHIND, OUTPUT);  // assumed to drive vibrotactor
+  pinMode(Y_PIN_BEHIND, OUTPUT);  // assumed to drive vibrotactor
+
+  //
+  // Activate vibrotactors for 1000 ms to show a sign of life
+  //  
+  digitalWrite(X_PIN, HIGH);  
+  digitalWrite(Y_PIN, HIGH);  
+  digitalWrite(X_PIN_BEHIND, HIGH);  
+  digitalWrite(Y_PIN_BEHIND, HIGH);  
+
+  delay(1000);
+
+  digitalWrite(X_PIN, LOW);  
+  digitalWrite(Y_PIN, LOW);  
+  digitalWrite(X_PIN_BEHIND, LOW);  
+  digitalWrite(Y_PIN_BEHIND, LOW);  
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void updateVibrotactors(){
+  SensorData sensorData = gSensorHandler->GetSensorData();
+
+  bool x_axis_at_threshold = false;
+  bool y_axis_at_threshold = false;
+  bool z_axis_at_threshold = false;
+
+  bool x_axis_behind_threshold = false;
+  bool y_axis_behind_threshold = false;
+  bool z_axis_behind_threshold = false;
+
+  // use current sensor data to determine if vibrotactor should be activated
+  // the calculation depends on a pre-configured mode
+  switch(gVibrotactorActivationMode){
+    case RELATIVE_ANGLE:
+      x_axis_at_threshold = sensorData.angleXRelative() > THRESHOLD_DEGREES;
+      y_axis_at_threshold = sensorData.angleYRelative() > THRESHOLD_DEGREES;
+      z_axis_at_threshold = sensorData.angleZRelative() > THRESHOLD_DEGREES;
+
+      x_axis_behind_threshold = sensorData.angleXRelative() < THRESHOLD_DEGREES * -1;
+      y_axis_behind_threshold = sensorData.angleYRelative() < THRESHOLD_DEGREES * -1;
+      z_axis_behind_threshold = sensorData.angleZRelative() < THRESHOLD_DEGREES * -1;
+      break;
+
+    case ANGULAR_VELOCITY:
+      x_axis_at_threshold = sensorData.gyroX > THRESHOLD_VELOCITY;
+      y_axis_at_threshold = sensorData.gyroY > THRESHOLD_VELOCITY;
+      z_axis_at_threshold = sensorData.gyroZ > THRESHOLD_VELOCITY;
+
+      x_axis_behind_threshold = sensorData.gyroX < THRESHOLD_VELOCITY * -1;
+      y_axis_behind_threshold = sensorData.gyroY < THRESHOLD_VELOCITY * -1;
+      z_axis_behind_threshold = sensorData.gyroZ < THRESHOLD_VELOCITY * -1;
+
+      break;
+  }
+
+  //
+  // Apply digital outputs, to drive vibrotactors
+  //
+  digitalWrite(X_PIN, x_axis_at_threshold);  
+  digitalWrite(Y_PIN, y_axis_at_threshold);  
+  digitalWrite(X_PIN_BEHIND, x_axis_behind_threshold);  
+  digitalWrite(Y_PIN_BEHIND, y_axis_behind_threshold);  
+
+  //
+  // Log some debug information every DEBUG_PRINT_INTERVAL_MS milliseconds - for now, configured to go to serial 
+  // 
+  String msg;
+  if (false && (millis() - gLastDebugPrintMillis >= DEBUG_PRINT_INTERVAL_MS)) {
+    msg = "Vibrotactor Activation Status:";
+    LOG_INFO(msg);
+
+    msg = "X at threshold: " + String(x_axis_at_threshold);
+    msg += ", behind threshold: " + String(x_axis_behind_threshold);
+    LOG_INFO(msg);
+
+    msg = "Y at threshold: " + String(y_axis_at_threshold);
+    msg += ", behind threshold: " + String(y_axis_behind_threshold);
+    LOG_INFO(msg);
+
+    msg = "Z at threshold: " + String(z_axis_at_threshold);
+    msg += ", behind threshold: " + String(z_axis_behind_threshold);
+    LOG_INFO(msg);
+
+    gOscHandler->PrintStatus();
+    gWifiHandler->PrintStatus();
+    gSensorHandler->PrintStatus();
+    gLastDebugPrintMillis = millis();
+  }
+
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void setup(void) {
+  double setup_start_time = millis();
+
+  //
+  // Initialize serial connection to host
+  //
+  Serial.begin(115200);                         
+
+  //
+  // Wait for serial interface connection to host machine
+  //  
+  unsigned long previousMillis=0;
+  int max_serial_time=2000;
+  while(!Serial){
+    unsigned long currentMillis = millis();
+    if (millis() - previousMillis>max_serial_time){
+      String msg = "Serial Monitor Not Connected after ";
+      msg += max_serial_time;
+      msg += " msec";
+      do_not_continue();
+    }
+    delay(250);
+  }
+
+  String msg = "BPD project\r\n==========";
+  LOG_INFO(msg);
+
+  //
+  // Initialize / configure vibrotactors
+  //
+  initializeVibrotactors();
+  
+  //
+  // Initialize sensor
+  //
+  initializeSensor();
+
+  //
+  // Initialize Wifi
+  //
+  initializeWifi();
+
+  //
+  // Initialize Osc
+  //
+  initializeOsc();
+
+  //
+  // Hello (LED) world
+  //
+  initializeLedMatrix();
+
+  double setup_end_time=millis();
+  double setup_elapsed_seconds=(setup_end_time-setup_start_time)/1000;
+  msg = "Completed Setup in ";
+  msg += setup_elapsed_seconds;
+  msg += "\tseconds";
+  LOG_INFO(msg);
+}
+
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void sendOSCMessages(){
+  //
+  // Send OSC messaged every TRANSMISSION_INTERVAL_MS milliseconds
+  // 
+  if (millis() - gLastOscMessageSendMillis >= TRANSMISSION_INTERVAL_MS) {
+    //
+    // Obtain copy of most current IMU data
+    //  
+    SensorData sensorData = gSensorHandler->GetSensorData();
+
+    gOscHandler->Send(sensorData.gyroX, sensorData.gyroY, sensorData.gyroZ, OSCSENDADDRESSGYRO);
+    gOscHandler->Send(sensorData.angleXAbsolute, sensorData.angleYAbsolute, sensorData.angleZAbsolute, OSCSENDADDRESSANGLE);
+    gOscHandler->Send(sensorData.accX, sensorData.accY, sensorData.accZ, OSCSENDADDRESSACCEL);
+    gOscHandler->Send(sensorData.accAngleX, sensorData.accAngleY, OSCSENDADDRESSACCELANGLE);
+    gOscHandler->Send(sensorData.temp, OSCSENDADDRESSTEMP);
+    gLastOscMessageSendMillis = millis();
+  }
+
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void receiveOSCMessages(){
+
+
+    // TODO: RECEIVE OSC
+  
+//    messageSize = mqttClient.parseMessage();
+    
+//    if (messageSize) {
+//      Serial.print("received message size:\t");
+//      Serial.print(messageSize);
+//      Serial.print("\t");
+//      message="";
+//      while (mqttClient.available()) {
+//        character=char((mqttClient.read()));
+//        message+=character;
+//        Serial.print(character);
+//      }
+//      Serial.println();
+//      split_index=message.indexOf(",");
+//      parsed_x_axis_angle=message.substring(0,split_index);
+//      parsed_y_axis_angle=message.substring(split_index+1,message.length());
+//      x_axis_angle=parsed_x_axis_angle.toFloat();
+//      y_axis_angle=parsed_y_axis_angle.toFloat();
+  
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------------------------
+void loop() {
+  //
+  // Update subsystems
+  //
+  OscHandler::Update();
+  gSensorHandler->Update();
+
+  sendOSCMessages();
+  receiveOSCMessages();
+  
+  //
+  // Update vibrotactors. Until Receive OSC is implemented (see above) vibrotactors will be affected by the LOCAL IMU data
+  //
+  updateVibrotactors();
+}
