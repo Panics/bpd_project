@@ -74,19 +74,20 @@ void WifiHandler::_printCurrentNet() {
   long rssi = WiFi.RSSI();
   LOG_INFO("signal strength (RSSI): " + String(rssi));
 
-  // print the encryption type:
+/*
+  // Print the encryption type. This code is commented out because it takes a relative long time to run
   byte encryption = WiFi.encryptionType();
-  char hexString[3]; // 2 characters for hex, 1 for null terminator
+  char hexString[3] = {0,0,0}; // 2 characters for hex, 1 for null terminator
   sprintf(hexString, "%02X", encryption); // "%02X" formats as 2 uppercase hex digits, padded with leading zero if needed
-
   LOG_INFO(String("Encryption Type: ") + String(hexString));
+*/
 }
 
 // ------------------------------------------------------------------------------------------------
 String WifiHandler::_macAddressToString(byte mac[]) {
   String s;
   for (byte i = 0; i < 6; ++i) {
-    char buf[3]; // Buffer for two hex digits + null terminator
+    char buf[3] = {0,0,0}; // Buffer for two hex digits + null terminator
     sprintf(buf, "%02X", mac[i]); // Format byte as two uppercase hex digits
     s += buf;
     if (i < 5) {

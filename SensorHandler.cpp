@@ -59,7 +59,7 @@ SensorData SensorHandler::GetSensorData(){
 
 // ------------------------------------------------------------------------------------------------
 void SensorHandler::PrintStatus(){
-  String msg = "IMU Status:\r\n";
+  String msg = "IMU Status:";
   LOG_INFO(msg);
   msg = "Initial Angle: " + String(_sensorData.angleXInitial) + ", " + String(_sensorData.angleYInitial)  + ", " + String(_sensorData.angleZInitial);
   LOG_INFO(msg);

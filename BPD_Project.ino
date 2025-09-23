@@ -77,7 +77,7 @@ To Use
 #define THRESHOLD_VELOCITY          10
 
 // OSC configuration
-#define OSCDESTINATIONIP            IPAddress(192,168,1,255)
+#define OSCDESTINATIONIP            IPAddress(255,255,255,255)
 #define OSCDESTINATIONPORT          2323
 #define OSCRECEIVEPORT              2323
 #define OSCSENDADDRESSANGLE         "/Brandeis/BPD/SendAngle"
@@ -412,7 +412,7 @@ void loop() {
   receiveOSCMessages();
   
   //
-  // Update vibrotactors. Until Receive OSC is implemented (see above) vibrotactors will be affected by the LOCAL IMU data
+  // Update vibrotactors. Need OSC receiving to be implemented first
   //
-  updateVibrotactors();
+  // updateVibrotactors();
 }
