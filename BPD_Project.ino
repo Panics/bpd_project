@@ -9,57 +9,12 @@
 // ArduinoGraphics
 // ArduinoOSC
 //
+// Then, install support for Arduino UNO R4 WiFi. Connect your Arduino board via USB, and select it from the drop down in the top left of the Arduino IDE
 //
-// Monitoring OSC Messages
-// =======================
+// Then, modify the contents of the file 'arduino_secrets.h' with the appropriate WiFi SSID and password
 //
-// Install https://hexler.net/protokol#windows
-// Configure to monitor for OSC messages on port 2323 (this can be configured in the osc section below)
-//
-// Visualizing OSC Messages
-// =======================
-//
-// Install https://hexler.net/touchosc 
-// Open the json file: BPD.tosc
-// Configure to monitor for OSC messages on port 2323 (the Arduino is sending to this port, this can be configured in the osc section below)
-// - Press the chain link icon in the toolbar at the top of the screen
-//  - OSC Connection 1:
-//  - UDP
-//  - 127.0.0.1
-//  - Send port 2324
-//  - Receive port 2323
-// - Press the 'play' icon in the toolbar at the top of the screen
-// Touch OSC essentially does the same as Protokol: showing OSC messages - but with graphical widgets instead of scrolling text 
-//
-// Setting up the Ardiuno script
-// =============================
-//
-// Configure the OSCDESTINATIONIP define below, to be the IP address of the machine running protokol
-//
+// Then, just compile and upload the project to the connected arduino
 
-/*
-Arduino Dance Project Motion Prototype Version 5
-
-Version 1: using rotation sensor to turn on vibrotactors
-Version 2: sending rotation wirelessly using ArduinoDanceprojectReceive
-Version 3: using calibration code to get position,sending which vibrotactor to vibrate and also vibrating them on the local machine
-Version 4: sending which tactors to vibrate wirelessly, also incldues receive mode configurable via jumper pin
-Version 5 : calibrated accelaration sensor by zeroing position with offset
-Version 6: Option for outputting velocity
-
-Using the  MPU6050 acceleromoter, gyroscpe,and termperature sensor and digital outputs based off the 
-X, Y,and Z Axis thresholds
-Here is the code source: https://github.com/rfetick/MPU6050_light
-
-Based on AdaFruit MPU6050 Example
-from https://github.com/jacobsmith2021/Arduino-Dance-Project
-
-To Use
-1) Solder to header pins safely
-2) Plug MPU6050 sensor into GND, VCC to 5V, SDA, and SCL  on Arduino chip
-3) Plug Vibrotactors, LEDS or any other digital output into digital ports 0, 1, and 2, and 3
-  make sure your digital output circuit is correct, LED's usually need a 220 Ω (Ohm, unit for resistance) resistor
-*/
 
 // -----------------------------------------------------------------------------------------------------------------------------------------------------------------
 // The digital ports of the vibrotactors

@@ -1,2 +1,2 @@
-#define SECRET_SSID "<YOUR WIFI SSID HERE>"
-#define SECRET_PASS "<YOUR WIFI PASSWORD HERE>"
+#define SECRET_SSID "^Experience"
+#define SECRET_PASS "nestje303"
